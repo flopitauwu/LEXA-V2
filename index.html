@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LEXA 💜⚖️</title>
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./script.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-top">
+        <div class="brand-icon">⚖️</div>
+        <div class="brand-text">
+          <div class="brand-name">LEXA <span>💜</span></div>
+          <div class="brand-sub">Academic Control for Law Queens</div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-btn active" data-view="dashboard">🏠 Dashboard</button>
+      <button class="nav-btn" data-view="calculator">📊 Calculadora</button>
+      <button class="nav-btn" data-view="planner">📅 Planificador</button>
+      <button class="nav-btn" data-view="history">📚 Historial</button>
+    </nav>
+
+    <div class="sidebar-footer">✨ Simple • Funcional • Persistente</div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="top-left">
+        <div class="pill">Semestre activo</div>
+        <select id="semesterSelect"></select>
+        <button id="newSemesterBtn" class="btn ghost">➕</button>
+      </div>
+
+      <div class="top-right">
+        <button id="exportBtn" class="btn ghost">Exportar</button>
+        <label class="btn ghost">
+          Importar
+          <input id="importInput" type="file" accept="application/json" hidden>
+        </label>
+      </div>
+    </header>
+
+    <section id="view-dashboard" class="view"></section>
+    <section id="view-calculator" class="view hidden"></section>
+    <section id="view-planner" class="view hidden"></section>
+    <section id="view-history" class="view hidden"></section>
+
+    <footer class="footer">LEXA • made for iPad & phone 💜</footer>
+  </main>
+</body>
+</html>
