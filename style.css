@@ -4,7 +4,7 @@
   --ink:#171428;
   --muted:#6e678a;
   --lilac:#6f4cff;
-  --lilac-2:#b8aaff;
+  --lilac2:#b8aaff;
   --line:#eee9fb;
   --shadow: 0 14px 40px rgba(23,20,40,.08);
   --r:18px;
@@ -122,7 +122,9 @@ body{
   background: rgba(255,255,255,.9);
   box-shadow: var(--shadow);
 }
+
 .top-left, .top-right{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+
 .pill{
   padding:7px 10px;
   border-radius:999px;
@@ -132,6 +134,7 @@ body{
   font-size:12px;
   color:var(--muted);
 }
+
 select, input{
   padding:9px 11px;
   border-radius: 12px;
@@ -140,6 +143,7 @@ select, input{
   font-weight:900;
   outline:none;
 }
+
 input:focus, select:focus{
   border-color: rgba(111,76,255,.40);
   box-shadow: 0 0 0 4px rgba(111,76,255,.10);
@@ -152,8 +156,20 @@ input:focus, select:focus{
   background:#fff;
   cursor:pointer;
   font-weight:900;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+.btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(111,76,255,.30);
+  box-shadow: 0 10px 24px rgba(111,76,255,.12);
 }
 .btn.ghost{background: rgba(247,246,255,.9);}
+.btn.danger{
+  border-color: rgba(226,75,102,.30);
+  background:#fff5f7;
+  color: var(--danger);
+}
+.filebtn{display:inline-flex; align-items:center; gap:8px;}
 
 .view{display:grid; gap:14px;}
 .hidden{display:none !important;}
@@ -172,6 +188,11 @@ input:focus, select:focus{
 .grid{display:grid; gap:14px}
 .cols-3{grid-template-columns: repeat(3, 1fr);}
 .cols-2{grid-template-columns: 1fr 1fr;}
+
+.row{display:flex; gap:10px; flex-wrap:wrap; align-items:end;}
+.row > *{flex:1}
+.no-flex{flex:0 0 auto}
+.tiny{padding:7px 9px; font-size:12px}
 
 .badge{
   display:inline-flex; align-items:center; gap:8px;
@@ -199,11 +220,6 @@ input:focus, select:focus{
 }
 .table th{color:var(--muted); font-size:12px;}
 
-.row{display:flex; gap:10px; flex-wrap:wrap; align-items:end;}
-.row > *{flex:1}
-.no-flex{flex:0 0 auto}
-.tiny{padding:7px 9px; font-size:12px}
-
 .ramo-card{
   border:1px solid var(--line);
   border-radius: var(--r);
@@ -226,7 +242,6 @@ input:focus, select:focus{
   font-weight:1000;
 }
 
-/* Flocus */
 .flocus-card{
   background: linear-gradient(180deg, rgba(233,246,255,.92), rgba(215,240,255,.92));
   border-color: rgba(80,170,255,.22);
@@ -238,12 +253,6 @@ input:focus, select:focus{
   grid-template-columns: 1fr 280px;
   gap:14px;
   align-items:center;
-}
-@media (max-width: 980px){
-  body{grid-template-columns:1fr}
-  .sidebar{position:relative; height:auto}
-  .cols-3, .cols-2{grid-template-columns:1fr}
-  .flocus-wrap{grid-template-columns:1fr}
 }
 
 .clock{
@@ -308,4 +317,11 @@ input:focus, select:focus{
   color:var(--muted);
   font-weight:700;
   font-size:12.5px;
+}
+
+@media (max-width: 980px){
+  body{grid-template-columns:1fr}
+  .sidebar{position:relative; height:auto}
+  .cols-3, .cols-2{grid-template-columns:1fr}
+  .flocus-wrap{grid-template-columns:1fr}
 }
