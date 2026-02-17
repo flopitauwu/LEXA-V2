@@ -360,7 +360,7 @@ function renderCalculator(){
   views.calculator.innerHTML = `
     <div class="card">
       <h2>📊 Calculadora</h2>
-      <div class="muted">${locked ? "Este semestre está cerrado (solo lectura)." : "Compacta, directa, y con lo necesario ✅"}</div>
+      <div class="muted">${locked ? "Este semestre está cerrado (solo lectura)." : "Puedes con todo leona💕"}</div>
       <div class="hr"></div>
 
       <div class="row">
@@ -374,7 +374,7 @@ function renderCalculator(){
     </div>
 
     <div class="card">
-      <h3>📚 Mis ramos</h3>
+      <h3>🌺 Mis ramos</h3>
       <div class="hr"></div>
       <div class="grid" id="ramosContainer">
         ${ramos.length ? ramos.map(([name,r])=> ramoCardHTML(name,r,locked)).join("") : `<div class="muted">Aún no hay ramos.</div>`}
@@ -657,7 +657,7 @@ function renderHistory(){
 
   views.history.innerHTML = `
     <div class="card">
-      <h2>📚 Historial</h2>
+      <h2>📖 Historial</h2>
       <div class="muted">Aquí aparecen SOLO los semestres cerrados con “Cierre”.</div>
       <div class="hr"></div>
 
