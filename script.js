@@ -1,29 +1,17 @@
 /***********************
-  LEXA — 100% funcional
-  - Sidebar navegación por secciones
-  - Semestres (crear)
-  - Calculadora compacta:
-      ramos, notas, %<=100, borrar, necesaria para 4.0
-  - Planificador:
-      evaluaciones por fecha/ramo/tipo + borrar
-  - Dashboard:
-      promedio (acumulado), horas estudiadas, riesgos, próximas evaluaciones
-  - Flocus:
-      reloj interactivo (tap start/pause), suma minutos al ramo,
-      horas sugeridas/semana editable
-  - Historial:
-      SOLO semestres cerrados (cierre de semestre)
-  - Informe descargable:
-      HTML descargable del semestre activo
-  - Persistencia localStorage
+  LEXA — Full V2 (pulido)
+  - UI más lila suave
+  - Calculadora sin badges innecesarios
+  - Timer suma en segundos (ya no se pierde si pausas antes de 1 min)
+  - Estudio acumulado por ramo SIEMPRE visible
+  - Topbar limpio: solo semestre + cierre + informe
 ***********************/
 
 const $ = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
 
-const KEY = "LEXA_FULL_V1";
+const KEY = "LEXA_FULL_V2";
 
-/* Utils */
 const round2 = (n)=> Math.round(n*100)/100;
 const pad2 = (n)=> String(n).padStart(2,"0");
 const isoDate = (d=new Date()) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
@@ -63,8 +51,14 @@ function daysUntil(iso){
   const d = new Date(iso + "T00:00:00");
   return Math.round((d - today) / (1000*60*60*24));
 }
-function minutesToHoursText(min){
-  return `${round2(min/60)} h`;
+
+/* Tiempo: mostramos bonito */
+function studyTextFromSeconds(sec){
+  sec = sec || 0;
+  if(sec < 60) return `${sec}s`;
+  const min = Math.floor(sec/60);
+  if(min < 60) return `${min} min`;
+  return `${round2(sec/3600)} h`;
 }
 
 /* Storage */
@@ -79,11 +73,8 @@ function load(){
 function save(){
   localStorage.setItem(KEY, JSON.stringify(data));
 }
-function wipeAll(){
-  localStorage.removeItem(KEY);
-}
 
-/* Data model */
+/* Data */
 let data = load() || {
   activeSemester: nowSemester(),
   semestres: {}
@@ -95,17 +86,29 @@ function ensureSemester(key){
       status: "open", // open | closed
       createdAt: isoDate(),
       closedAt: null,
-      ramos: {
-        // "Penal": { notas:[{nota,porcentaje}], minutosEstudio:0, targetHoras:4 }
-      },
-      evaluaciones: [
-        // {id, date, ramo, tipo}
-      ]
+      ramos: {},
+      evaluaciones: []
     };
   }
 }
 
+/* Migración: si venías con minutosEstudio, lo paso a studySec */
+function migrateSemester(sem){
+  for(const r of Object.values(sem.ramos || {})){
+    if(r.studySec == null){
+      // si existía minutosEstudio, convierto; si no, 0
+      const min = (r.minutosEstudio || 0);
+      r.studySec = Math.round(min * 60);
+      delete r.minutosEstudio;
+    }
+    if(r.targetHoras == null) r.targetHoras = 4;
+    if(!Array.isArray(r.notas)) r.notas = [];
+  }
+  if(!Array.isArray(sem.evaluaciones)) sem.evaluaciones = [];
+}
+
 ensureSemester(data.activeSemester);
+for(const sem of Object.values(data.semestres)) migrateSemester(sem);
 save();
 
 /* Views */
@@ -115,7 +118,6 @@ const views = {
   planner: $("#view-planner"),
   history: $("#view-history"),
 };
-
 function showView(name){
   Object.keys(views).forEach(k=>{
     views[k].classList.toggle("hidden", k !== name);
@@ -123,7 +125,7 @@ function showView(name){
   $$(".nav-btn").forEach(b=> b.classList.toggle("active", b.dataset.view === name));
 }
 
-/* Stats */
+/* Cálculo notas */
 function ramoStats(r){
   const notas = r.notas || [];
   const pct = notas.reduce((a,n)=> a+n.porcentaje, 0);
@@ -163,11 +165,11 @@ function semesterSummary(semKey){
     .filter(e=> daysUntil(e.date) >= 0);
 
   let sum=0, count=0;
-  let totalMin=0;
+  let totalSec=0;
   let risks=0;
 
   for(const [,r] of ramos){
-    totalMin += (r.minutosEstudio||0);
+    totalSec += (r.studySec||0);
     const st = ramoStats(r);
     if(st.pct > 0){
       sum += st.acumulado;
@@ -178,7 +180,7 @@ function semesterSummary(semKey){
 
   return {
     avg: count ? round2(sum/count) : null,
-    totalMin,
+    totalSec,
     risks,
     upcoming: upcoming.slice(0,5),
     totalRamos: ramos.length
@@ -194,10 +196,21 @@ function renderTop(){
 
   const sem = data.semestres[data.activeSemester];
   const closeBtn = $("#closeSemesterBtn");
-  closeBtn.textContent = sem.status === "closed" ? "🔓 Reabrir (opcional)" : "🔒 Cierre de semestre";
+  closeBtn.textContent = sem.status === "closed" ? "🔓 Reabrir" : "🔒 Cierre";
 }
 
 /* Dashboard */
+function renderRiskBadges(sem){
+  const entries = Object.entries(sem.ramos || {});
+  const risks = entries
+    .map(([name,r])=> ({name, st: ramoStats(r)}))
+    .filter(x=> x.st.risk);
+
+  if(!entries.length) return `<div class="muted">Agrega ramos en Calculadora.</div>`;
+  if(!risks.length) return `<span class="badge ok">Todo estable por ahora 💜</span>`;
+  return `<div class="row">${risks.map(r=> `<span class="badge risk">${escapeHtml(r.name)}</span>`).join("")}</div>`;
+}
+
 function renderDashboard(){
   const semKey = data.activeSemester;
   const sem = data.semestres[semKey];
@@ -247,10 +260,10 @@ function renderDashboard(){
 
       <div class="card">
         <h2>⏳ Estudio</h2>
-        <div class="muted">Horas estudiadas en el semestre</div>
+        <div class="muted">Tiempo total del semestre</div>
         <div class="hr"></div>
         <div style="font-weight:1000; font-size:26px;">
-          ${minutesToHoursText(sum.totalMin)}
+          ${studyTextFromSeconds(sum.totalSec)}
         </div>
         <div class="muted">Alertas de riesgo: <b>${sum.risks}</b></div>
       </div>
@@ -274,29 +287,25 @@ function renderDashboard(){
   `;
 }
 
-function renderRiskBadges(sem){
-  const entries = Object.entries(sem.ramos || {});
-  const risks = entries
-    .map(([name,r])=> ({name, st: ramoStats(r)}))
-    .filter(x=> x.st.risk);
-
-  if(!entries.length) return `<div class="muted">Agrega ramos en Calculadora.</div>`;
-  if(!risks.length) return `<span class="badge ok">Todo estable por ahora 💜</span>`;
-
-  return `<div class="row">${risks.map(r=> `<span class="badge risk">${escapeHtml(r.name)}</span>`).join("")}</div>`;
-}
-
-/* Calculadora */
+/* Calculadora (limpia) */
 function ramoCardHTML(name, r, locked){
   const st = ramoStats(r);
   const badge = st.risk ? `<span class="badge risk">Riesgo</span>` : `<span class="badge ok">OK</span>`;
+
+  // línea compacta con info útil
+  const neces = (st.pct === 0) ? "—" : (st.necesaria ?? "—");
+  const pctTxt = st.pct ? `${st.pct}% evaluado` : "0% evaluado";
 
   return `
     <div class="ramo-card">
       <div class="ramo-head">
         <div>
           <div class="ramo-title">${escapeHtml(name)}</div>
-          <div class="muted">Estudio: <b>${minutesToHoursText(r.minutosEstudio||0)}</b> • Sugerido/sem: <b>${r.targetHoras ?? 4}h</b></div>
+          <div class="muted">
+            Estudio: <b>${studyTextFromSeconds(r.studySec||0)}</b> •
+            Sugerido/sem: <b>${r.targetHoras ?? 4}h</b> •
+            <span>${pctTxt}</span>
+          </div>
         </div>
         <div class="row" style="justify-content:flex-end; align-items:center;">
           ${badge}
@@ -337,11 +346,7 @@ function ramoCardHTML(name, r, locked){
 
       <div class="hr"></div>
 
-      <div class="row">
-        <span class="badge">Evaluado: <b>${st.pct}%</b></span>
-        <span class="badge">Acumulado: <b>${st.pct ? st.acumulado : "—"}</b></span>
-        <span class="badge">Necesaria 4.0: <b>${st.pct ? (st.necesaria ?? "—") : "—"}</b></span>
-      </div>
+      <div class="muted"><b>Necesaria para aprobar (4.0):</b> ${neces}</div>
       <div class="muted">${st.msg}</div>
     </div>
   `;
@@ -354,8 +359,8 @@ function renderCalculator(){
 
   views.calculator.innerHTML = `
     <div class="card">
-      <h2>📊 Calculadora (compacta)</h2>
-      <div class="muted">${locked ? "Este semestre está cerrado (solo lectura)." : "Agrega ramos y registra notas. La necesaria para 4.0 se ve abajo."}</div>
+      <h2>📊 Calculadora</h2>
+      <div class="muted">${locked ? "Este semestre está cerrado (solo lectura)." : "Compacta, directa, y con lo necesario ✅"}</div>
       <div class="hr"></div>
 
       <div class="row">
@@ -363,7 +368,7 @@ function renderCalculator(){
           <div class="muted">Nombre del ramo</div>
           <input id="ramoName" ${locked?"disabled":""} placeholder="Ej: Civil / Penal / Procesal..." />
         </div>
-        ${locked ? "" : `<button id="addRamoBtn" class="btn ghost no-flex">➕ Agregar</button>`}
+        ${locked ? "" : `<button id="addRamoBtn" class="btn primary no-flex">➕ Agregar</button>`}
         <div id="ramoMsg" class="muted" style="flex:2"></div>
       </div>
     </div>
@@ -386,13 +391,13 @@ function mascotSvg(){
     <svg class="mascot" viewBox="0 0 420 360" aria-hidden="true">
       <defs>
         <linearGradient id="m1" x1="0" x2="1">
-          <stop offset="0" stop-color="#6f4cff"/>
-          <stop offset="1" stop-color="#b8aaff"/>
+          <stop offset="0" stop-color="#7a5cff"/>
+          <stop offset="1" stop-color="#c9beff"/>
         </linearGradient>
       </defs>
 
       <path d="M70 120c-24 0-44 16-44 36s20 36 44 36h250c28 0 50-18 50-40 0-20-18-36-42-36-10-26-36-44-66-44-24 0-45 10-58 26-10-8-24-12-40-12-20 0-38 8-48 20-12-14-28-22-46-22z"
-            fill="rgba(255,255,255,.65)"/>
+            fill="rgba(255,255,255,.70)"/>
 
       <path d="M150 70c-20-30-10-60 10-62 18-2 30 18 30 40 0 16-10 30-40 22z" fill="url(#m1)" opacity=".9"/>
       <path d="M230 70c20-30 10-60-10-62-18-2-30 18-30 40 0 16 10 30 40 22z" fill="url(#m1)" opacity=".9"/>
@@ -401,22 +406,22 @@ function mascotSvg(){
       <circle cx="155" cy="145" r="10" fill="#ffd6e7" opacity=".9"/>
       <circle cx="225" cy="145" r="10" fill="#ffd6e7" opacity=".9"/>
 
-      <circle cx="165" cy="125" r="8" fill="#171428"/>
-      <circle cx="215" cy="125" r="8" fill="#171428"/>
+      <circle cx="165" cy="125" r="8" fill="#19152c"/>
+      <circle cx="215" cy="125" r="8" fill="#19152c"/>
       <circle cx="162" cy="122" r="3" fill="#fff"/>
       <circle cx="212" cy="122" r="3" fill="#fff"/>
 
-      <path d="M176 150c8 10 20 10 28 0" stroke="#171428" stroke-width="8" stroke-linecap="round" fill="none"/>
+      <path d="M176 150c8 10 20 10 28 0" stroke="#19152c" stroke-width="8" stroke-linecap="round" fill="none"/>
 
-      <path d="M120 280c0-54 30-98 70-98s70 44 70 98c0 26-16 44-38 44h-64c-22 0-38-18-38-44z" fill="rgba(255,255,255,.75)"/>
+      <path d="M120 280c0-54 30-98 70-98s70 44 70 98c0 26-16 44-38 44h-64c-22 0-38-18-38-44z" fill="rgba(255,255,255,.78)"/>
 
-      <path d="M90 250h210c10 0 18 8 18 18v46H72v-46c0-10 8-18 18-18z" fill="#171428" opacity=".92"/>
+      <path d="M90 250h210c10 0 18 8 18 18v46H72v-46c0-10 8-18 18-18z" fill="#19152c" opacity=".92"/>
       <path d="M100 242h190c10 0 18 8 18 18v46H82v-46c0-10 8-18 18-18z" fill="#fff"/>
-      <path d="M110 265h85v10h-85zM210 265h85v10h-85z" fill="#d7f0ff"/>
-      <path d="M110 285h85v10h-85zM210 285h85v10h-85z" fill="#f7f6ff"/>
+      <path d="M110 265h85v10h-85zM210 265h85v10h-85z" fill="#dcf3ff"/>
+      <path d="M110 285h85v10h-85zM210 285h85v10h-85z" fill="#fbf9ff"/>
 
-      <path d="M332 86l6 12 14 2-10 9 2 14-12-6-12 6 2-14-10-9 14-2z" fill="rgba(111,76,255,.45)"/>
-      <path d="M360 145l4 8 9 1-7 6 2 9-8-4-8 4 2-9-7-6 9-1z" fill="rgba(111,76,255,.35)"/>
+      <path d="M332 86l6 12 14 2-10 9 2 14-12-6-12 6 2-14-10-9 14-2z" fill="rgba(122,92,255,.45)"/>
+      <path d="M360 145l4 8 9 1-7 6 2 9-8-4-8 4 2-9-7-6 9-1z" fill="rgba(122,92,255,.35)"/>
     </svg>
   `;
 }
@@ -431,7 +436,7 @@ function renderPlanner(){
     <div class="grid cols-2">
       <div class="card">
         <h2>📅 Planificador</h2>
-        <div class="muted">${locked ? "Semestre cerrado (solo lectura)." : "Registra evaluaciones y se verán en Dashboard como recordatorio."}</div>
+        <div class="muted">${locked ? "Semestre cerrado (solo lectura)." : "Registra evaluaciones y aparecerán en Dashboard."}</div>
         <div class="hr"></div>
 
         <div class="row">
@@ -453,7 +458,7 @@ function renderPlanner(){
               <option>examen</option>
             </select>
           </div>
-          ${locked ? "" : `<button id="addEvalBtn" class="btn ghost no-flex">Agregar</button>`}
+          ${locked ? "" : `<button id="addEvalBtn" class="btn primary no-flex">Agregar</button>`}
         </div>
 
         <div id="evMsg" class="muted" style="margin-top:8px;"></div>
@@ -482,7 +487,7 @@ function renderPlanner(){
 
       <div class="card flocus-card">
         <h2>⏱ Tiempo de Flocus 🤓</h2>
-        <div class="muted">${locked ? "Semestre cerrado (timer deshabilitado)." : "Tap en el reloj para iniciar/pausar • al pausar suma minutos al ramo."}</div>
+        <div class="muted">${locked ? "Semestre cerrado (timer deshabilitado)." : "Tap en el reloj para iniciar/pausar • suma tiempo aunque sea poquito."}</div>
         <div class="hr"></div>
 
         <div class="row">
@@ -536,13 +541,13 @@ function renderPlanner(){
         </div>
 
         <div class="hr"></div>
-        <div class="muted">Tus minutos se suman al ramo y se ven en Calculadora + Dashboard ✅</div>
+        <div class="muted">Al pausar, el tiempo se suma al ramo y se refleja en la Calculadora ✅</div>
       </div>
     </div>
   `;
 }
 
-/* Timer */
+/* Timer (ahora suma segundos) */
 function startTimer(ramo){
   if(timer.running) return;
   timer.ramo = ramo;
@@ -559,11 +564,9 @@ function pauseAndCommit(){
   clearInterval(timer.tickId);
   timer.tickId = null;
 
-  const minutes = Math.round(timer.elapsedSec/60);
   const sem = data.semestres[data.activeSemester];
-
-  if(minutes > 0 && timer.ramo && sem?.ramos?.[timer.ramo]){
-    sem.ramos[timer.ramo].minutosEstudio = (sem.ramos[timer.ramo].minutosEstudio||0) + minutes;
+  if(timer.elapsedSec > 0 && timer.ramo && sem?.ramos?.[timer.ramo]){
+    sem.ramos[timer.ramo].studySec = (sem.ramos[timer.ramo].studySec||0) + timer.elapsedSec;
   }
 
   timer.elapsedSec = 0;
@@ -606,21 +609,6 @@ function updateClockUI(){
 }
 
 /* Historial */
-function renderHistory(){
-  const keys = Object.keys(data.semestres).sort((a,b)=> b.localeCompare(a));
-  const closed = keys.filter(k => data.semestres[k].status === "closed");
-
-  views.history.innerHTML = `
-    <div class="card">
-      <h2>📚 Historial</h2>
-      <div class="muted">Aquí aparecen SOLO los semestres cerrados con “Cierre de semestre”.</div>
-      <div class="hr"></div>
-
-      ${closed.length ? closed.map(k=> historyBlockHTML(k)).join("") : `<div class="muted">Aún no has cerrado ningún semestre.</div>`}
-    </div>
-  `;
-}
-
 function historyBlockHTML(semKey){
   const sem = data.semestres[semKey];
   const sum = semesterSummary(semKey);
@@ -636,7 +624,7 @@ function historyBlockHTML(semKey){
 
       <div class="row">
         <span class="badge">Promedio: <b>${sum.avg ?? "—"}</b></span>
-        <span class="badge">Horas: <b>${minutesToHoursText(sum.totalMin)}</b></span>
+        <span class="badge">Estudio: <b>${studyTextFromSeconds(sum.totalSec)}</b></span>
         <span class="badge">Ramos: <b>${sum.totalRamos}</b></span>
       </div>
 
@@ -644,7 +632,7 @@ function historyBlockHTML(semKey){
 
       ${ramos.length ? `
         <table class="table">
-          <thead><tr><th>Ramo</th><th>Final</th><th>Horas</th></tr></thead>
+          <thead><tr><th>Ramo</th><th>Final</th><th>Estudio</th></tr></thead>
           <tbody>
             ${ramos.map(([name,r])=>{
               const st = ramoStats(r);
@@ -652,7 +640,7 @@ function historyBlockHTML(semKey){
                 <tr>
                   <td><b>${escapeHtml(name)}</b></td>
                   <td>${st.notaFinal ?? "—"}</td>
-                  <td>${minutesToHoursText(r.minutosEstudio||0)}</td>
+                  <td>${studyTextFromSeconds(r.studySec||0)}</td>
                 </tr>
               `;
             }).join("")}
@@ -663,7 +651,22 @@ function historyBlockHTML(semKey){
   `;
 }
 
-/* Informe descargable (HTML) */
+function renderHistory(){
+  const keys = Object.keys(data.semestres).sort((a,b)=> b.localeCompare(a));
+  const closed = keys.filter(k => data.semestres[k].status === "closed");
+
+  views.history.innerHTML = `
+    <div class="card">
+      <h2>📚 Historial</h2>
+      <div class="muted">Aquí aparecen SOLO los semestres cerrados con “Cierre”.</div>
+      <div class="hr"></div>
+
+      ${closed.length ? closed.map(k=> historyBlockHTML(k)).join("") : `<div class="muted">Aún no has cerrado ningún semestre.</div>`}
+    </div>
+  `;
+}
+
+/* Informe (HTML descargable) */
 function buildReportHTML(semKey){
   const sem = data.semestres[semKey];
   const sum = semesterSummary(semKey);
@@ -675,7 +678,7 @@ function buildReportHTML(semKey){
     return `<tr>
       <td>${escapeHtml(name)}</td>
       <td>${st.notaFinal ?? "—"}</td>
-      <td>${minutesToHoursText(r.minutosEstudio||0)}</td>
+      <td>${studyTextFromSeconds(r.studySec||0)}</td>
       <td>${(r.targetHoras ?? 4)} h/sem</td>
     </tr>`;
   }).join("");
@@ -693,7 +696,7 @@ function buildReportHTML(semKey){
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>LEXA Informe ${semKey}</title>
 <style>
-  body{font-family:Arial,system-ui; background:#fff; color:#171428; padding:18px;}
+  body{font-family:Arial,system-ui; background:#fff; color:#19152c; padding:18px;}
   h1{margin:0 0 6px 0;}
   .muted{color:#6e678a; margin:0 0 14px 0;}
   .box{border:1px solid #eee9fb; border-radius:14px; padding:12px; margin:12px 0;}
@@ -709,7 +712,7 @@ function buildReportHTML(semKey){
 
   <div class="box">
     <span class="pill">Promedio: <b>${sum.avg ?? "—"}</b></span>
-    <span class="pill">Horas: <b>${minutesToHoursText(sum.totalMin)}</b></span>
+    <span class="pill">Estudio: <b>${studyTextFromSeconds(sum.totalSec)}</b></span>
     <span class="pill">Ramos: <b>${sum.totalRamos}</b></span>
     <span class="pill">Riesgos: <b>${sum.risks}</b></span>
   </div>
@@ -717,7 +720,7 @@ function buildReportHTML(semKey){
   <div class="box">
     <h3>Ramos</h3>
     <table>
-      <thead><tr><th>Ramo</th><th>Nota final</th><th>Horas</th><th>Sugerido</th></tr></thead>
+      <thead><tr><th>Ramo</th><th>Nota final</th><th>Estudio</th><th>Sugerido</th></tr></thead>
       <tbody>${rowsR || `<tr><td colspan="4">Sin ramos</td></tr>`}</tbody>
     </table>
   </div>
@@ -730,7 +733,7 @@ function buildReportHTML(semKey){
     </table>
   </div>
 
-  <p class="muted">Tip: en iPad puedes usar “Compartir → Imprimir” y guardarlo como PDF.</p>
+  <p class="muted">Tip: en iPad puedes “Compartir → Imprimir” y guardarlo como PDF.</p>
 </body>
 </html>`;
 }
@@ -745,9 +748,10 @@ function downloadTextFile(filename, content, mime="text/html"){
   URL.revokeObjectURL(url);
 }
 
-/* Render all */
+/* Render */
 function renderAll(){
   ensureSemester(data.activeSemester);
+  migrateSemester(data.semestres[data.activeSemester]);
   save();
 
   renderTop();
@@ -757,9 +761,9 @@ function renderAll(){
   renderHistory();
 }
 
-/* Event wiring */
+/* Init */
 function init(){
-  // navigation
+  // nav
   $$(".nav-btn").forEach(btn=>{
     btn.addEventListener("click", ()=> showView(btn.dataset.view));
   });
@@ -768,6 +772,7 @@ function init(){
   $("#semesterSelect").addEventListener("change", (e)=>{
     data.activeSemester = e.target.value;
     ensureSemester(data.activeSemester);
+    migrateSemester(data.semestres[data.activeSemester]);
     save();
     renderAll();
   });
@@ -779,12 +784,13 @@ function init(){
     const key = k.trim();
     if(!key) return;
     ensureSemester(key);
+    migrateSemester(data.semestres[key]);
     data.activeSemester = key;
     save();
     renderAll();
   });
 
-  // close semester (toggle)
+  // close semester toggle
   $("#closeSemesterBtn").addEventListener("click", ()=>{
     const sem = data.semestres[data.activeSemester];
     if(sem.status === "open"){
@@ -792,12 +798,9 @@ function init(){
       if(!ok) return;
       sem.status = "closed";
       sem.closedAt = isoDate();
-      // detener timer si estaba corriendo
-      if(timer.running){
-        pauseAndCommit();
-      }
-    }else{
-      const ok = confirm("¿Reabrir este semestre? (opcional)");
+      if(timer.running) pauseAndCommit();
+    } else {
+      const ok = confirm("¿Reabrir este semestre?");
       if(!ok) return;
       sem.status = "open";
       sem.closedAt = null;
@@ -806,53 +809,14 @@ function init(){
     renderAll();
   });
 
-  // download report (active semester)
+  // download report
   $("#downloadReportBtn").addEventListener("click", ()=>{
     const semKey = data.activeSemester;
     const html = buildReportHTML(semKey);
     downloadTextFile(`LEXA-informe-${semKey}.html`, html, "text/html");
   });
 
-  // export/import
-  $("#exportBtn").addEventListener("click", ()=>{
-    downloadTextFile(`LEXA-backup-${isoDate()}.json`, JSON.stringify(data, null, 2), "application/json");
-  });
-
-  $("#importInput").addEventListener("change", async (e)=>{
-    const file = e.target.files?.[0];
-    if(!file) return;
-    try{
-      const txt = await file.text();
-      const obj = JSON.parse(txt);
-      if(!obj?.semestres) throw new Error("Archivo inválido.");
-      data = obj;
-      if(!data.activeSemester) data.activeSemester = nowSemester();
-      ensureSemester(data.activeSemester);
-      save();
-      renderAll();
-      alert("Importado ✅");
-    }catch(err){
-      alert("No se pudo importar: " + err.message);
-    }finally{
-      e.target.value = "";
-    }
-  });
-
-  // reset
-  $("#resetBtn").addEventListener("click", ()=>{
-    const ok = confirm("Esto borrará TODO (localStorage). ¿Confirmas?");
-    if(!ok) return;
-    wipeAll();
-    // reset timer
-    resetTimer();
-    data = { activeSemester: nowSemester(), semestres: {} };
-    ensureSemester(data.activeSemester);
-    save();
-    renderAll();
-    showView("dashboard");
-  });
-
-  // Delegation: calculator & planner actions
+  // delegated clicks (para que no se rompa al re-render)
   document.addEventListener("click", (ev)=>{
     const t = ev.target;
     const sem = data.semestres[data.activeSemester];
@@ -865,7 +829,7 @@ function init(){
       const msg = $("#ramoMsg");
       if(!name){ if(msg) msg.textContent="Escribe el nombre del ramo."; return; }
       if(sem.ramos[name]){ if(msg) msg.textContent="Ese ramo ya existe (no se duplica)."; return; }
-      sem.ramos[name] = { notas: [], minutosEstudio: 0, targetHoras: 4 };
+      sem.ramos[name] = { notas: [], studySec: 0, targetHoras: 4 };
       if(msg) msg.textContent="Ramo agregado ✅";
       $("#ramoName").value = "";
       save(); renderAll();
@@ -988,7 +952,6 @@ function init(){
     }
   });
 
-  // Initial render
   renderAll();
   showView("dashboard");
 }
