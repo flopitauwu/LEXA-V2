@@ -243,7 +243,7 @@ function renderDashboard(){
   views.dashboard.innerHTML = `
     <div class="grid cols-3">
       <div class="card">
-        <h2>🏠 Dashboard</h2>
+        <h2> 👾 Dashboard</h2>
         <div class="muted">Semestre: <b>${semKey}</b> • Estado: <b>${sem.status}</b></div>
         <div class="hr"></div>
         <span class="badge">Ramos: <b>${sum.totalRamos}</b></span>
@@ -278,7 +278,7 @@ function renderDashboard(){
       </div>
 
       <div class="card">
-        <h3>⚠️ Ramos en riesgo</h3>
+        <h3> 📌 Ramos en riesgo</h3>
         <div class="muted">Se marca si necesitarías más de 7.0 o si ya reprobó.</div>
         <div class="hr"></div>
         ${renderRiskBadges(sem)}
